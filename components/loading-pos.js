@@ -1,57 +1,159 @@
-import React, { Component } from 'react';
+import React, { Component, useState, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import axios from 'axios';
+import RNEventSource from 'react-native-event-source';
+import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+
 
 
 
 
 class LoadingPos extends Component {
+  
     constructor(props) {
         super(props);
         this.state = {
-          text: 'rien reçu'
+          text: 'rien reçu', 
+          location : null,
+          errorMsg: null
         };
+
+        
+       
+        
+        
+  
       }
+    
+      
     componentDidMount(){
         
 
-        //token de reception(inutile pour l'instant)
-        const options = { authorizationHeader: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiaHR0cHM6Ly9leGFtcGxlLmNvbS9teS1wcml2YXRlLXRvcGljIiwie3NjaGVtZX06Ly97K2hvc3R9L2RlbW8vYm9va3Mve2lkfS5qc29ubGQiLCIvLndlbGwta25vd24vbWVyY3VyZS9zdWJzY3JpcHRpb25zey90b3BpY317L3N1YnNjcmliZXJ9Il0sInBheWxvYWQiOnsidXNlciI6Imh0dHBzOi8vZXhhbXBsZS5jb20vdXNlcnMvZHVuZ2xhcyIsInJlbW90ZUFkZHIiOiIxMjcuMC4wLjEifX19.3hufqajaGI1i_wduX-bOg9lrBv3ybzeU9GdJLxyXyF4" };
+        
+        const apiUrl = 'https://hangover.timotheedurand.fr/api/';
+        
        
         // création de l'objet URLavec l'url du hub mercure + ajout des abonnements aux différents topics
-        const url = new  URL('http://hangover-hub.timotheedurand.fr/.well-known/mercure');
-        url.searchParams.append('topic', 'https://example.com/my-private-topic');
-        url.searchParams.append('topic', 'https://example.com/my-public-topic');
-        url.searchParams.append('topic', 'https://hangoverapp.fr/loc-user-12');
+        const url = new URL('https://hangover-hub.timotheedurand.fr/.well-known/mercure');
+        
+          axios.get(`${apiUrl}users/12`, { headers: {
+            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2NTYzMzE0OTAsImV4cCI6MTY1NjMzNTA5MCwicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJlbWFpbCI6ImFkbWluQGhhbmdvdmVyLmNvbSJ9.4j2aEBEPHfhPkd5HwuSeZSf6LHvJ8w829tixvBKAnBirSDajpOkLZZpFinPhz3_ptqYiUlE825jAmmnjeSE08asJHuc5K180IcXl6dlKN9qAPxsHsZVoeBv6-TlZUWRDzgeEuEqCFF2m9W8C3MmiEDqIEP54JAaaS6SrY9S5XSv44HxPHXtILas5p8Bx6KCRdUzJ6M-soOsJEwUameShntS0Hn0dIWoGwmaUelKEaVZB1iGtPG8emLWdWRDKN9-Mpe0WMAbn-jTpG4sxxntiFpvgnEiCkTdYhLW19NRtq9u3iRAdx_B1vc8UpS09yfhe3c6lgOJV4_xFGahrTg_YQg'
+          }})
+          .then((response) => {
+            const currentUser = response.data;
+            let friendships = response.data.friendships;
+
+            friendships = friendships.concat(response.data.friendsWithMe);
+
+            console.log(friendships);
+            for(let friends of friendships){
+              console.log(friends);
+              url.searchParams.append('topic', `https://hangoverapp.fr/loc${friends}`);
+            }
+            url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12');
+
+            this.listenTopics(url);
+  
+            
+            
+            
+          })
+          .catch(error => console.error(`Error: ${error.message}`));
+          
+          
+          console.log(url);
+
+          this.initMap();
+        
+          
+
+        //token de reception(inutile pour l'instant)
+        
         
         // ecoute des 3 topics
-        const eventSource = new EventSource(url);
+        
 
         // publish de la location de l'appareil
-        this.sendLocation();
+        
         
         // si receptionde modif sur un des 3 topic alors on récupère la prop message avecsa valeur
-        eventSource.addEventListener('message', (data) => {
-            console.log(data);
-            this.setState({text: JSON.parse(data.data).message.lat + ' ' + JSON.parse(data.data).message.long});
-          });
+        
 
     };
 
+    async initMap(){
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          this.setState({ errorMsg:'Permission to access location was denied'});
+          return;
+        }
+        const LOCATION_TASK_NAME = "LOCATION_TASK_NAME"
+        let location = await Location.getCurrentPositionAsync({});
+        this.createMessagePosition(location);
+        this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
+
+        TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+          if (error) {
+            console.error(error)
+            return
+          }
+          if (data) {
+            // Extract location coordinates from data
+            const { locations } = data
+            const location = locations[0]
+            
+            if (location) {
+              this.createMessagePosition(location);
+              this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
+              
+            }
+          }
+        });
+
+        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: Location.Accuracy.BestForNavigation,
+          showsBackgroundLocationIndicator: true,
+          foregroundService: {
+            notificationTitle: "Location",
+            notificationBody: "Location tracking in background",
+            notificationColor: "#fff",
+          },
+          deferredUpdatesDistance: 5,
+        });
+    }
+
+    listenTopics(url){
+      const options = {headers : { Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI" }};
+      const eventSource = new RNEventSource("https://hangover-hub.timotheedurand.fr/.well-known/mercure?topic=https://hangoverapp.fr/loc/api/friendships/12&topic=https://hangoverapp.fr/loc/api/friendships/17", options);
+
+
+      eventSource.addEventListener('message', (data) => {
+        console.log('lhkgf')
+        console.log(data);
+        this.setState({text: JSON.parse(data.data).message.lat + ' ' + JSON.parse(data.data).message.long});
+      });
+      
+    }
+
     // récupération de la localisation
-    sendLocation(){
-      if (navigator.geolocation){
+    /* sendLocation(){
+      
+      if (navigator.geolocation){    
+        
         navigator.geolocation.getCurrentPosition(this.createMessagePosition);
+        navigator.geolocation.watchPosition(this.createMessagePosition,null,{distanceFilter: 5});
       }  else {
         console.log("Geolocation is not supported by this browser.");
       }
-    }
+    } */
     
     // création du message à publish
     createMessagePosition(position) {
-
+      
       // l'objet à envoyer doit contenir une partie topic avec l'url du topic a qui envoyer ainsi qu'une partie data (appellation obligatoire) qui contient le message à écouter (obliger aussi)
       let details = {
-        'topic': 'https://hangoverapp.fr/loc-user-12',
+        'topic': 'https://hangoverapp.fr/loc/api/friendships/12',
         'data': JSON.stringify({'message' : {
           'lat': position.coords.latitude,
           'long': position.coords.longitude
@@ -71,7 +173,7 @@ class LoadingPos extends Component {
 
       
       // envoi de la requete avec l'url du hub mercure, la methode, le header avec le token d'envoi (celui-ci marche avec tous les topics) et le content-type (important) etenfin le body avec l'objet précédent
-      fetch('http://hangover-hub.timotheedurand.fr/.well-known/mercure', {
+      fetch('https://hangover-hub.timotheedurand.fr/.well-known/mercure', {
         method: 'POST',
         headers: {
           'Authorization': 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI',
@@ -81,12 +183,16 @@ class LoadingPos extends Component {
       });
           
           
-    }    
+    }  
+      
 
     render() {
+      
         return (
             <View>
                 <Text>{this.state.text}</Text>
+                <Text>{this.state.location}</Text>
+                <Text>{this.state.errorMsg}</Text>
             </View>
 
         );
