@@ -16,7 +16,8 @@ class LoadingPos extends Component {
         this.state = {
           text: 'rien reçu', 
           location : null,
-          errorMsg: null
+          errorMsg: null,
+          locations: {},
         };
 
         
@@ -27,7 +28,7 @@ class LoadingPos extends Component {
       }
     
       
-    componentDidMount(){
+    async componentDidMount(){
         
 
         
@@ -35,36 +36,48 @@ class LoadingPos extends Component {
         
        
         // création de l'objet URLavec l'url du hub mercure + ajout des abonnements aux différents topics
-        const url = new URL('https://hangover-hub.timotheedurand.fr/.well-known/mercure');
-        
-          axios.get(`${apiUrl}users/12`, { headers: {
-            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2NTYzMzE0OTAsImV4cCI6MTY1NjMzNTA5MCwicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJlbWFpbCI6ImFkbWluQGhhbmdvdmVyLmNvbSJ9.4j2aEBEPHfhPkd5HwuSeZSf6LHvJ8w829tixvBKAnBirSDajpOkLZZpFinPhz3_ptqYiUlE825jAmmnjeSE08asJHuc5K180IcXl6dlKN9qAPxsHsZVoeBv6-TlZUWRDzgeEuEqCFF2m9W8C3MmiEDqIEP54JAaaS6SrY9S5XSv44HxPHXtILas5p8Bx6KCRdUzJ6M-soOsJEwUameShntS0Hn0dIWoGwmaUelKEaVZB1iGtPG8emLWdWRDKN9-Mpe0WMAbn-jTpG4sxxntiFpvgnEiCkTdYhLW19NRtq9u3iRAdx_B1vc8UpS09yfhe3c6lgOJV4_xFGahrTg_YQg'
+        let url = 'https://hangover-hub.timotheedurand.fr/.well-known/mercure';
+
+        try {
+          const response = await axios.get(`${apiUrl}users/44`, { headers: {
+            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2NTY0MDI0NDMsImV4cCI6MTY4NjQwNjA0Mywicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJlbWFpbCI6ImFkbWluQGhhbmdvdmVyLmNvbSJ9.YpQu8JKKZTVrDSEAwTc66jyxw7hhQu7G499TKCBgC7OkofHPWNYgALGGr5kp5mKcftAbEvF6G5QTuWIW_sF9aDUSRXmOS8bNarBMdZohqqC4-wlTs8lMP6BoNxRr6ZrCL9Vd6ifN9lPs02nkjR3M_eaHZjZdwI9xbkhN7KPu9sc7wXqd2yqgKjmjWC-SfH_7AR45t1YeDUpk1Fu7izWEgpj5kOrTUimaCYCp6aGiS9u3Gpm4B6rkR7xrL69Zdaz2cyHHaIbD_ccYmWq2_tE_8B8Qh9BuZVrFKLAkzjqutWwsC18LBbBucBhjxK9JX022x_vew1iUS0awwlCx5Gb2og'
           }})
-          .then((response) => {
             const currentUser = response.data;
             let friendships = response.data.friendships;
 
             friendships = friendships.concat(response.data.friendsWithMe);
 
-            console.log(friendships);
-            for(let friends of friendships){
-              console.log(friends);
-              url.searchParams.append('topic', `https://hangoverapp.fr/loc${friends}`);
+            
+            for(let friend of friendships){
+              
+              if(friendships.indexOf(friend) == 0){
+                url = url.concat('?', `topic=https://hangoverapp.fr/loc${friend}`);
+              } else {
+                url = url.concat('&', `topic=https://hangoverapp.fr/loc${friend}`);
+              }
+              
+              
+              
+              /* url.searchParams.append('topic', `https://hangoverapp.fr/loc${friends}`); */
             }
-            url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12');
+            url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friendships/44`);
+            
+           /*  url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12'); */
 
             this.listenTopics(url);
+            this.initMap(currentUser);
   
             
             
-            
-          })
-          .catch(error => console.error(`Error: ${error.message}`));
+        } catch (e) {
+          console.error(`Error: ${error.message}`)
+        } 
+  
           
+        
           
-          console.log(url);
 
-          this.initMap();
+          
         
           
 
@@ -82,7 +95,7 @@ class LoadingPos extends Component {
 
     };
 
-    async initMap(){
+    async initMap(currentUser){
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
           this.setState({ errorMsg:'Permission to access location was denied'});
@@ -90,7 +103,7 @@ class LoadingPos extends Component {
         }
         const LOCATION_TASK_NAME = "LOCATION_TASK_NAME"
         let location = await Location.getCurrentPositionAsync({});
-        this.createMessagePosition(location);
+        this.createMessagePosition(location, currentUser);
         this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
 
         TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
@@ -100,11 +113,12 @@ class LoadingPos extends Component {
           }
           if (data) {
             // Extract location coordinates from data
-            const { locations } = data
+            const { locations } = data;
+            
             const location = locations[0]
             
             if (location) {
-              this.createMessagePosition(location);
+              this.createMessagePosition(location, currentUser);
               this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
               
             }
@@ -125,38 +139,36 @@ class LoadingPos extends Component {
 
     listenTopics(url){
       const options = {headers : { Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI" }};
-      const eventSource = new RNEventSource("https://hangover-hub.timotheedurand.fr/.well-known/mercure?topic=https://hangoverapp.fr/loc/api/friendships/12&topic=https://hangoverapp.fr/loc/api/friendships/17", options);
+      const eventSource = new RNEventSource(url, options);
 
 
       eventSource.addEventListener('message', (data) => {
-        console.log('lhkgf')
-        console.log(data);
-        this.setState({text: JSON.parse(data.data).message.lat + ' ' + JSON.parse(data.data).message.long});
+
+        const userData = JSON.parse(data.data).message.user;
+        const location = JSON.parse(data.data).message.location;
+        const {locations} = this.state;
+        locations[userData.id] = userData.firstName + ' ' + userData.lastName + ' : lat -> ' + location.lat + ' , long -> ' + location.long
+        console.log(locations);
+        this.setState({locations});
+      
       });
       
     }
 
-    // récupération de la localisation
-    /* sendLocation(){
-      
-      if (navigator.geolocation){    
-        
-        navigator.geolocation.getCurrentPosition(this.createMessagePosition);
-        navigator.geolocation.watchPosition(this.createMessagePosition,null,{distanceFilter: 5});
-      }  else {
-        console.log("Geolocation is not supported by this browser.");
-      }
-    } */
+    
     
     // création du message à publish
-    createMessagePosition(position) {
+    createMessagePosition(position, currentUser) {
       
       // l'objet à envoyer doit contenir une partie topic avec l'url du topic a qui envoyer ainsi qu'une partie data (appellation obligatoire) qui contient le message à écouter (obliger aussi)
       let details = {
-        'topic': 'https://hangoverapp.fr/loc/api/friendships/12',
+        'topic': 'https://hangoverapp.fr/loc/api/friendships/44',
         'data': JSON.stringify({'message' : {
-          'lat': position.coords.latitude,
-          'long': position.coords.longitude
+          'user': currentUser,
+          'location': {
+            'lat': position.coords.latitude,
+            'long': position.coords.longitude
+          }
         }})
         
       }
@@ -193,6 +205,9 @@ class LoadingPos extends Component {
                 <Text>{this.state.text}</Text>
                 <Text>{this.state.location}</Text>
                 <Text>{this.state.errorMsg}</Text>
+                {
+                  Object.values(this.state.locations).map((t,i) => <Text key={i}>{t}</Text>)
+                }
             </View>
 
         );
