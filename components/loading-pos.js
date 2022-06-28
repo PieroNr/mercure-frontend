@@ -162,7 +162,7 @@ class LoadingPos extends Component {
       
       // l'objet à envoyer doit contenir une partie topic avec l'url du topic a qui envoyer ainsi qu'une partie data (appellation obligatoire) qui contient le message à écouter (obliger aussi)
       let details = {
-        'topic': 'https://hangoverapp.fr/loc/api/friendships/44',
+        'topic': 'https://hangoverapp.fr/loc/api/friendships/' + currentUser.id,
         'data': JSON.stringify({'message' : {
           'user': currentUser,
           'location': {
