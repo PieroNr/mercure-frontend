@@ -78,7 +78,7 @@ class LoadingPos extends Component {
         this.setState({ errorMsg:'Permission to access location was denied'});
         return;
       }
-      const LOCATION_TASK_NAME = "LOCATION_TASK_NAME"
+      
       let location = await Location.getCurrentPositionAsync({});
       this.createMessagePosition(location, currentUser);
       this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
@@ -91,8 +91,8 @@ class LoadingPos extends Component {
         this.getAllFriendLocation(currentUser);
         /* this.createMessagePosition(location, currentUser);
         this.setState({location: location.coords.latitude + ' ' + location.coords.longitude}); */
-
-        TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+        const TASK_NAME = "LOCATION_TASK_NAME"
+        TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
           if (error) {
             console.error(error)
             return
@@ -111,7 +111,7 @@ class LoadingPos extends Component {
           }
         });
 
-        await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+        await Location.startLocationUpdatesAsync(TASK_NAME, {
           accuracy: Location.Accuracy.BestForNavigation,
           showsBackgroundLocationIndicator: true,
           foregroundService: {
