@@ -61,7 +61,7 @@ class LoadingPos extends Component {
             console.log(url);
            /*  url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12'); */
 
-            this.listenTopics(url);
+            this.listenTopics(url, currentUser);
             this.initMap(currentUser);
   
             
@@ -72,16 +72,25 @@ class LoadingPos extends Component {
 
     };
 
+    async sendMyLocation(currentUser){
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        this.setState({ errorMsg:'Permission to access location was denied'});
+        return;
+      }
+      const LOCATION_TASK_NAME = "LOCATION_TASK_NAME"
+      let location = await Location.getCurrentPositionAsync({});
+      this.createMessagePosition(location, currentUser);
+      this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
+      return location;
+    }
+
     async initMap(currentUser){
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          this.setState({ errorMsg:'Permission to access location was denied'});
-          return;
-        }
-        const LOCATION_TASK_NAME = "LOCATION_TASK_NAME"
-        let location = await Location.getCurrentPositionAsync({});
-        this.createMessagePosition(location, currentUser);
-        this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
+        this.sendMyLocation(currentUser);
+        
+        this.getAllFriendLocation(currentUser);
+        /* this.createMessagePosition(location, currentUser);
+        this.setState({location: location.coords.latitude + ' ' + location.coords.longitude}); */
 
         TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           if (error) {
@@ -114,14 +123,50 @@ class LoadingPos extends Component {
         });
     }
 
-    listenTopics(url){
+    getAllFriendLocation(currentUser){
+      let details = {
+        'topic': 'https://hangoverapp.fr/loc/api/friend/user/' + currentUser.id,
+        'data': JSON.stringify({'message' : {
+          'user': currentUser,
+          'ask': 'Give me your location'
+        }})
+        
+      }
+      
+      // création du body de la requete post
+      let formBody = [];
+      for (let property in details){
+        let encodedKey = encodeURIComponent(property);
+        let encodedValue= encodeURIComponent(details[property]);
+        formBody.push(encodedKey + "=" + encodedValue);
+      }
+
+      formBody = formBody.join("&");
+
+      
+      // envoi de la requete avec l'url du hub mercure, la methode, le header avec le token d'envoi (celui-ci marche avec tous les topics) et le content-type (important) etenfin le body avec l'objet précédent
+      fetch('https://hangover-hub.timotheedurand.fr/.well-known/mercure', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formBody
+      });
+    }
+
+    async listenTopics(url, currentUser){
       const options = {headers : { Authorization: "Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI" }};
       const eventSource = new RNEventSource(url, options);
-
 
       eventSource.addEventListener('message', (data) => {
 
         const userData = JSON.parse(data.data).message.user;
+        if(JSON.parse(data.data).message.ask){
+          this.sendMyLocation(currentUser);   
+          return;
+
+        }
         const location = JSON.parse(data.data).message.location;
         const {locations} = this.state;
         locations[userData.id] = userData.firstName + ' ' + userData.lastName + ' : lat -> ' + location.lat + ' , long -> ' + location.long
