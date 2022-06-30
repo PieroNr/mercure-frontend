@@ -19,49 +19,46 @@ class LoadingPos extends Component {
           errorMsg: null,
           locations: {},
         };
-
-        
-       
-        
-        
-  
       }
     
       
     async componentDidMount(){
-        
 
-        
         const apiUrl = 'https://hangover.timotheedurand.fr/api/';
-        
-       
+
         // création de l'objet URLavec l'url du hub mercure + ajout des abonnements aux différents topics
         let url = 'https://hangover-hub.timotheedurand.fr/.well-known/mercure';
 
+        const api = axios.create({
+          baseURL: apiUrl, 
+          headers: {
+            Authorization: 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2NTY1ODE0MTEsImV4cCI6MTY4NjU4NTAxMSwicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJlbWFpbCI6ImFkbWluQGhhbmdvdmVyLmNvbSJ9.UkAsrymB2wjeaBYCcrFChPWWL00EHGryjl-AIn_Zdn-Nu0QvijEKy0lAA6TW09FiXvGSn5LitYdyNkWaZIypcjJm5WJwZwY5iZh1DJNk28V_p-C2fMqHHjN9pCrD0t1TxmmVepE6RN_TUAy0bAcOLATcLB3Z0nSLV1tHbm2EAsPvxC2PAuXfOQw8dcIl6Ge16EmqVO0m0A-XyKMFMpXYSdYwAt0aqvooBj1-aQKHFLu3elExwJc_R09L56yL40CnkKhVB-y0tAHxNdK2rW_1TTSxOPTaqPYUuAXi8JVqCEnhpM3bUdbcos1MBKfouWqYc2quS1AQfj3KIx83_-HwRw',
+            Accept: 'application/json'
+          }
+        }
+        );
+
         try {
-          const response = await axios.get(`${apiUrl}users/44`, { headers: {
-            'Authorization': 'Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpYXQiOjE2NTY0MDI0NDMsImV4cCI6MTY4NjQwNjA0Mywicm9sZXMiOlsiUk9MRV9BRE1JTiIsIlJPTEVfVVNFUiJdLCJlbWFpbCI6ImFkbWluQGhhbmdvdmVyLmNvbSJ9.YpQu8JKKZTVrDSEAwTc66jyxw7hhQu7G499TKCBgC7OkofHPWNYgALGGr5kp5mKcftAbEvF6G5QTuWIW_sF9aDUSRXmOS8bNarBMdZohqqC4-wlTs8lMP6BoNxRr6ZrCL9Vd6ifN9lPs02nkjR3M_eaHZjZdwI9xbkhN7KPu9sc7wXqd2yqgKjmjWC-SfH_7AR45t1YeDUpk1Fu7izWEgpj5kOrTUimaCYCp6aGiS9u3Gpm4B6rkR7xrL69Zdaz2cyHHaIbD_ccYmWq2_tE_8B8Qh9BuZVrFKLAkzjqutWwsC18LBbBucBhjxK9JX022x_vew1iUS0awwlCx5Gb2og'
-          }})
+          const response = await api.get(`users/21`)
             const currentUser = response.data;
-            let friendships = response.data.friendships;
+            const friendships = await (await api.get(`friendships/user/21`)).data;
+            
 
-            friendships = friendships.concat(response.data.friendsWithMe);
-
+      
             
             for(let friend of friendships){
               
               if(friendships.indexOf(friend) == 0){
-                url = url.concat('?', `topic=https://hangoverapp.fr/loc${friend}`);
+                url = url.concat('?', `topic=https://hangoverapp.fr/loc/api/friend/user/${friend.id}`);
+                
               } else {
-                url = url.concat('&', `topic=https://hangoverapp.fr/loc${friend}`);
+                url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friend/user/${friend.id}`);
               }
-              
-              
-              
+
               /* url.searchParams.append('topic', `https://hangoverapp.fr/loc${friends}`); */
             }
-            url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friendships/44`);
-            
+            url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friend/user/${currentUser.id}`);
+            console.log(url);
            /*  url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12'); */
 
             this.listenTopics(url);
@@ -70,28 +67,8 @@ class LoadingPos extends Component {
             
             
         } catch (e) {
-          console.error(`Error: ${error.message}`)
+          console.error(`Error: ${e.response.data}`)
         } 
-  
-          
-        
-          
-
-          
-        
-          
-
-        //token de reception(inutile pour l'instant)
-        
-        
-        // ecoute des 3 topics
-        
-
-        // publish de la location de l'appareil
-        
-        
-        // si receptionde modif sur un des 3 topic alors on récupère la prop message avecsa valeur
-        
 
     };
 
@@ -148,7 +125,6 @@ class LoadingPos extends Component {
         const location = JSON.parse(data.data).message.location;
         const {locations} = this.state;
         locations[userData.id] = userData.firstName + ' ' + userData.lastName + ' : lat -> ' + location.lat + ' , long -> ' + location.long
-        console.log(locations);
         this.setState({locations});
       
       });
@@ -162,7 +138,7 @@ class LoadingPos extends Component {
       
       // l'objet à envoyer doit contenir une partie topic avec l'url du topic a qui envoyer ainsi qu'une partie data (appellation obligatoire) qui contient le message à écouter (obliger aussi)
       let details = {
-        'topic': 'https://hangoverapp.fr/loc/api/friendships/' + currentUser.id,
+        'topic': 'https://hangoverapp.fr/loc/api/friend/user/' + currentUser.id,
         'data': JSON.stringify({'message' : {
           'user': currentUser,
           'location': {
@@ -202,7 +178,7 @@ class LoadingPos extends Component {
       
         return (
             <View>
-                <Text>{this.state.text}</Text>
+                
                 <Text>{this.state.location}</Text>
                 <Text>{this.state.errorMsg}</Text>
                 {
