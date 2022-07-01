@@ -1,30 +1,21 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-import LoadingPos from './components/loading-pos';
-
-
-
-
+import { StatusBar } from "expo-status-bar";
+import { StyleSheet, Text, View } from "react-native";
+import LoadingPos from "./components/loading-pos";
 
 export default function App() {
-  
-  
   return (
     <View style={styles.container}>
-      <LoadingPos></LoadingPos>
+      <LoadingPos />
       <StatusBar style="auto" />
     </View>
   );
-  
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
