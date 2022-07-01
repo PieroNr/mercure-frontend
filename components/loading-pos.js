@@ -1,5 +1,13 @@
-import React, { Component, useState, useEffect } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { Component } from 'react';
+import {
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  ScrollView,
+  TouchableOpacity,
+  FlatList
+} from 'react-native';
 import axios from 'axios';
 import RNEventSource from 'react-native-event-source';
 import * as Location from 'expo-location';
@@ -18,6 +26,7 @@ class LoadingPos extends Component {
           location : null,
           errorMsg: null,
           locations: {},
+          friends: []
         };
       }
     
@@ -28,6 +37,8 @@ class LoadingPos extends Component {
 
         // création de l'objet URLavec l'url du hub mercure + ajout des abonnements aux différents topics
         let url = 'https://hangover-hub.timotheedurand.fr/.well-known/mercure';
+        const TASK_NAME = "LOCATION_TASK_NAME";
+        
 
         const api = axios.create({
           baseURL: apiUrl, 
@@ -43,22 +54,49 @@ class LoadingPos extends Component {
             const currentUser = response.data;
             const friendships = await (await api.get(`friendships/user/21`)).data;
             
-
+            TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
+              if (error) {
+                console.error(error)
+                return
+              }
+              if (data) {
+                // Extract location coordinates from data
+                const { locations } = data;
+                
+                const location = locations[0]
+                
+                if (location) {
+                  this.createMessagePosition(location, currentUser);
+                  this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
+                  
+                }
+              }
+            });
       
             
             for(let friend of friendships){
               
-              if(friendships.indexOf(friend) == 0){
+              if(friendships.indexOf(friend) === 0){
                 url = url.concat('?', `topic=https://hangoverapp.fr/loc/api/friend/user/${friend.id}`);
                 
               } else {
                 url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friend/user/${friend.id}`);
               }
+              this.state.friends.push({
+                'id': friend.id,
+                'firstname': friend.firstName,
+                'lastname': friend.lastName,
+                'profilePicture': "https://us.123rf.com/450wm/mialima/mialima1603/mialima160300025/55096766-ic%C3%B4ne-d-utilisateur-homme-isol%C3%A9-sur-un-fond-blanc-compte-avatar-pour-le-web-utilisateur-photo-de-pro.jpg?ver=6"
+              });
+              
+              
+
 
               /* url.searchParams.append('topic', `https://hangoverapp.fr/loc${friends}`); */
             }
+            console.log(this.state.friends);
             url = url.concat('&', `topic=https://hangoverapp.fr/loc/api/friend/user/${currentUser.id}`);
-            console.log(url);
+            
            /*  url.searchParams.append('topic', 'https://hangoverapp.fr/loc/api/friendships/12'); */
 
             this.listenTopics(url, currentUser);
@@ -92,24 +130,7 @@ class LoadingPos extends Component {
         /* this.createMessagePosition(location, currentUser);
         this.setState({location: location.coords.latitude + ' ' + location.coords.longitude}); */
         const TASK_NAME = "LOCATION_TASK_NAME"
-        TaskManager.defineTask(TASK_NAME, async ({ data, error }) => {
-          if (error) {
-            console.error(error)
-            return
-          }
-          if (data) {
-            // Extract location coordinates from data
-            const { locations } = data;
-            
-            const location = locations[0]
-            
-            if (location) {
-              this.createMessagePosition(location, currentUser);
-              this.setState({location: location.coords.latitude + ' ' + location.coords.longitude});
-              
-            }
-          }
-        });
+        
 
         await Location.startLocationUpdatesAsync(TASK_NAME, {
           accuracy: Location.Accuracy.BestForNavigation,
@@ -176,6 +197,39 @@ class LoadingPos extends Component {
       
     }
 
+    ghostMode(currentUser){
+
+      let details = {
+        'topic': 'https://hangoverapp.fr/loc/api/friend/user/' + currentUser.id,
+        'data': JSON.stringify({'message' : {
+          'user': currentUser,
+          'ask': 'Ghost'
+        }})
+        
+      }
+      
+      // création du body de la requete post
+      let formBody = [];
+      for (let property in details){
+        let encodedKey = encodeURIComponent(property);
+        let encodedValue= encodeURIComponent(details[property]);
+        formBody.push(encodedKey + "=" + encodedValue);
+      }
+
+      formBody = formBody.join("&");
+
+      
+      // envoi de la requete avec l'url du hub mercure, la methode, le header avec le token d'envoi (celui-ci marche avec tous les topics) et le content-type (important) etenfin le body avec l'objet précédent
+      fetch('https://hangover-hub.timotheedurand.fr/.well-known/mercure', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJtZXJjdXJlIjp7InB1Ymxpc2giOlsiKiJdLCJzdWJzY3JpYmUiOlsiKiJdLCJwYXlsb2FkIjp7InVzZXIiOiJodHRwczovL2V4YW1wbGUuY29tL3VzZXJzL2R1bmdsYXMiLCJyZW1vdGVBZGRyIjoiMTI3LjAuMC4xIn19fQ.iYRYJoHNXmfpzg9DnTSBc6fAbddMKUPRpdvtsLAq-pI',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formBody
+      });
+    }
+
     
     
     // création du message à publish
@@ -222,18 +276,69 @@ class LoadingPos extends Component {
     render() {
       
         return (
-            <View>
+            <View style={styles.container}>
                 
-                <Text>{this.state.location}</Text>
+                
+                <View style={styles.body}>
+                <FlatList 
+                    style={styles.container} 
+                    enableEmptySections={true}
+                    data={this.state.friends}
+                    keyExtractor= {(item) => {
+                      return item.id;
+                    }}
+                    renderItem={({item}) => {
+                      return (
+                        <TouchableOpacity>
+                          <View style={styles.box}>
+                            <Image style={styles.image} source={{uri: item.profilePicture}}/>
+                            <Text style={styles.username}>{item.firstname} {item.lastname}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      )
+                  }}/>
+                  <Text>{this.state.location}</Text>
                 <Text>{this.state.errorMsg}</Text>
                 {
                   Object.values(this.state.locations).map((t,i) => <Text key={i}>{t}</Text>)
                 }
+                </View>
             </View>
 
         );
     }
 
 }
+
+const styles = StyleSheet.create({
+  image:{
+    width: 60,
+    height: 60,
+  },
+  body:{
+    padding: 30,
+    backgroundColor: "#E6E6FA"
+  },
+  box: {
+    padding:5,
+    marginTop:5,
+    marginBottom:5,
+    backgroundColor: '#FFF',
+    flexDirection: 'row',
+    shadowColor: 'black',
+    shadowOpacity: .2,
+    shadowOffset: {
+      height:1,
+      width:-2
+    },
+    elevation: 2
+  },
+  username:{
+    color: "#20B2AA",
+    fontSize:22,
+    alignSelf:'center',
+    marginLeft:10
+  }
+});
 
 export default LoadingPos;
